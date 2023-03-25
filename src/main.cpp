@@ -149,13 +149,13 @@ void loop() {
   printf("metal: %d\n",RangeInCentimeters2);
 
 
-  plastic_percent = int(RangeInCentimeters1)*100/42;
-  metal_percent = int(RangeInCentimeters2)*100/42;
+  plastic_percent = (41 - int(RangeInCentimeters1))*100/41;
+  metal_percent = (41 - int(RangeInCentimeters2))*100/41;
 
   // plastic_percent = 100;
   // metal_percent = 100;
 
-  if(plastic_percent == 0 && metal_percent == 0){
+  if(plastic_percent <= 0 && metal_percent <= 0){
     if(!isSend){
       send_percent_tsh.state = 0;
       send_percent_tsh.plastic = 0;
@@ -175,7 +175,7 @@ void loop() {
     isSend = false;
   }
 
-  if(plastic_percent >= 99){
+  if(plastic_percent >= 95){
     // plastic + 100
     fake_plastic = 100 + plastic_percent;
     Sender.print(fake_plastic);
