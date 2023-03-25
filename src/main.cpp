@@ -20,6 +20,8 @@ int metal_percent;
 int fake_plastic = 0;
 int fake_metal = 0;
 bool isSend = false;
+bool isSendfull = false;
+
 
 //TaskHandle_t TaskA = NULL;
 
@@ -150,10 +152,10 @@ void loop() {
 
 
   plastic_percent = (41 - int(RangeInCentimeters1))*100/41;
-  metal_percent = (41 - int(RangeInCentimeters2))*100/41;
+  metal_percent = (41    - int(RangeInCentimeters2))*100/41;
 
-  // plastic_percent = 100;
-  // metal_percent = 100;
+  printf("plastic percent: %d\n",plastic_percent);
+  printf("metal percent: %d\n",metal_percent);
 
   if(plastic_percent <= 0 && metal_percent <= 0){
     if(!isSend){
@@ -161,6 +163,7 @@ void loop() {
       send_percent_tsh.plastic = 0;
       send_percent_tsh.metal = 0;
       isSend = true;
+      Sender.print(4);
       esp_err_t result = esp_now_send(NinaAddress, (uint8_t *) &send_percent_tsh, sizeof(send_percent_tsh));
         if (result == ESP_OK) {
             Serial.println("Sent with success");
@@ -168,25 +171,28 @@ void loop() {
         else {
             Serial.println("Error sending the data");
         }
+    }else if (isSendfull){
+      isSendfull = false;
     }
-    Sender.print(4);
   }
   else{
     isSend = false;
   }
 
-  if(plastic_percent >= 95){
+  if(plastic_percent >= 85 && !isSendfull){
     // plastic + 100
     fake_plastic = 100 + plastic_percent;
     Sender.print(fake_plastic);
     Serial.printf("send fake plastic: ");
     Serial.println(fake_plastic);
+    isSendfull = true;
   }
-  if(metal_percent >= 99){
+  if(metal_percent >= 85 && !isSendfull){
     fake_metal = 500 + metal_percent;
     Sender.print(fake_metal);
     Serial.printf("send fake metal: ");
     Serial.println(fake_metal);
+    isSendfull = true;
   }
 
   delay(1000);
