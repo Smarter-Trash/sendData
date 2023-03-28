@@ -32,7 +32,7 @@ HardwareSerial Sender(1);   // Define a Serial port instance called 'Sender' usi
 
 uint8_t NinaAddress[] = {0x3C, 0x61, 0x05, 0x03, 0x42, 0x70};
 uint8_t FaiiAddress[] = {0x24, 0x6F, 0x28, 0x25, 0x86, 0xDC};
-
+uint8_t patAddress[] = {0x3C, 0x61, 0x05, 0x03, 0x68, 0x74};
 typedef struct state_coin { 
   int state;
   int state_1;
@@ -45,6 +45,11 @@ typedef struct percent_tsh {
   int metal;
 } percent_tsh;
 
+typedef struct addcoin{
+  int state;
+}addcoin;
+
+addcoin recv_addcoin;
 percent_tsh recv_percent_tsh;
 percent_tsh send_percent_tsh;
 state_coin stc;
@@ -64,13 +69,14 @@ void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
   Serial.println(status == ESP_NOW_SEND_SUCCESS ? "Delivery Success" : "Delivery Fail");
 }
 
-void OnDataRecv(const uint8_t * mac_addr, const uint8_t *incomingData, int len) {
+void OnDataRecv(const uint8_t * mac_addr, const uint8_t *incomingData, int len){
   char macStr[18];
   Serial.print("Packet received from: ");
   snprintf(macStr, sizeof(macStr), "%02x:%02x:%02x:%02x:%02x:%02x",
            mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]);
   Serial.println(macStr);
 
+  // faii
   if (mac_addr[0] == 0x24 && mac_addr[1] == 0x6F && mac_addr[2] == 0x28 && mac_addr[3] == 0x25 && mac_addr[4] == 0x86 && mac_addr[5] == 0xDC){
     memcpy(&stc, incomingData, sizeof(stc));
 
@@ -89,13 +95,28 @@ void OnDataRecv(const uint8_t * mac_addr, const uint8_t *incomingData, int len) 
     }
   }
 
+  // Nina
   else if (mac_addr[0] == 0x3C && mac_addr[1] == 0x61 && mac_addr[2] == 0x05 && mac_addr[3] == 0x03 && mac_addr[4] == 0x42 && mac_addr[5] == 0x70){
     memcpy(&recv_percent_tsh, incomingData, sizeof(recv_percent_tsh));
 
     if(recv_percent_tsh.state == 14){
       send_percent_tsh.state = 0;
-      send_percent_tsh.plastic = plastic_percent;
-      send_percent_tsh.metal = metal_percent;
+
+      if (plastic_percent >= 85){
+        send_percent_tsh.plastic = 100;
+      }else if(plastic_percent == 0 || plastic_percent == -2){
+        send_percent_tsh.plastic = 0;
+      }else{
+        send_percent_tsh.plastic = plastic_percent;
+      }
+
+      if(metal_percent >= 85){
+        send_percent_tsh.metal = 100;
+      }else if(metal_percent == 0 || metal_percent == -2){
+        send_percent_tsh.metal = 0;
+      }else{
+        send_percent_tsh.metal = metal_percent;
+      }
 
       esp_err_t result = esp_now_send(NinaAddress, (uint8_t *) &send_percent_tsh, sizeof(send_percent_tsh));
         if (result == ESP_OK) {
@@ -105,6 +126,18 @@ void OnDataRecv(const uint8_t * mac_addr, const uint8_t *incomingData, int len) 
             Serial.println("Error sending the data");
         }
     }
+  }
+
+  // {0x3C, 0x61, 0x05, 0x03, 0x68, 0x74}
+  // pat
+  else if (mac_addr[0] == 0x3C && mac_addr[1] == 0x61 && mac_addr[2] == 0x05 && mac_addr[3] == 0x03 && mac_addr[4] == 0x68 && mac_addr[5] == 0x74){
+    memcpy(&recv_addcoin, incomingData, sizeof(recv_addcoin));
+
+    if(recv_addcoin.state == 13){
+      Sender.print(5);
+    
+    }
+    
   }
 } 
 
@@ -143,7 +176,7 @@ void setup() {
   //xTaskCreatePinnedToCore(check_trash, "check_trash", 2048, NULL, 1, &TaskA, 0);
 }
 
-void loop() {
+void loop(){
   RangeInCentimeters1 = ultrasonic1.MeasureInCentimeters();
   RangeInCentimeters2 = ultrasonic2.MeasureInCentimeters();
 
@@ -157,7 +190,7 @@ void loop() {
   printf("plastic percent: %d\n",plastic_percent);
   printf("metal percent: %d\n",metal_percent);
 
-  if(plastic_percent <= 0 && metal_percent <= 0){
+  if(plastic_percent == 0 && metal_percent == 0){
     if(!isSend){
       send_percent_tsh.state = 0;
       send_percent_tsh.plastic = 0;
@@ -186,6 +219,17 @@ void loop() {
     Serial.printf("send fake plastic: ");
     Serial.println(fake_plastic);
     isSendfull = true;
+    send_percent_tsh.state = 16;
+    send_percent_tsh.plastic = 100;
+    send_percent_tsh.metal = metal_percent;
+
+    esp_err_t result = esp_now_send(NinaAddress, (uint8_t *) &send_percent_tsh, sizeof(send_percent_tsh));
+    if (result == ESP_OK) {
+        Serial.println("Sent with success");
+    }
+    else {
+        Serial.println("Error sending the data");
+    }
   }
   if(metal_percent >= 85 && !isSendfull){
     fake_metal = 500 + metal_percent;
@@ -193,7 +237,19 @@ void loop() {
     Serial.printf("send fake metal: ");
     Serial.println(fake_metal);
     isSendfull = true;
+    send_percent_tsh.state = 16;
+    send_percent_tsh.plastic = plastic_percent;
+    send_percent_tsh.metal = 100;
+
+    esp_err_t result = esp_now_send(NinaAddress, (uint8_t *) &send_percent_tsh, sizeof(send_percent_tsh));
+    if (result == ESP_OK) {
+        Serial.println("Sent with success");
+    }
+    else {
+        Serial.println("Error sending the data");
+    }
   }
+
 
   delay(1000);
 }
